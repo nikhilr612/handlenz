@@ -4,14 +4,15 @@
 
 void default_app_config(AppConfig *cfg, Scale sc) {
 	cfg -> d2_threshold = 0.001;
-	cfg -> dispersion_lower_bound = 0.08;
+	cfg -> dispersion_lower_bound = 0.09;
 	cfg -> dispersion_upper_bound = 0.20;
-	cfg -> index_rate = 8.0;
+	cfg -> index_rate = 5.0;
 	cfg -> max_volume = 127;
 	cfg -> midiout_port = 0;
 	cfg -> let_ring = false;
 	cfg -> program = 46;
 	cfg -> scale = sc;
+	cfg -> cooldown_millis = 100;
 }
 
 // Create a safe app state.
@@ -24,6 +25,7 @@ AppState create_app_state() {
 
 	ret.last_played = 0;
 	ret.outdevice = NULL;
+	ret.last_time = 0;
 
 	return ret;
 }

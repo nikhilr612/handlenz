@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <time.h>
 
 #include "scales.h"
 #include "rtmidi_c.h"
@@ -33,6 +34,9 @@ typedef struct {
 
 	// The MIDI program to use.
 	uint8_t program;
+
+	// Cooldown between successive midi messages, in milliseconds.
+	clock_t cooldown_millis;
 } AppConfig;
 
 void default_app_config(AppConfig* cfg, Scale sc);
@@ -41,6 +45,7 @@ typedef struct {
 	float lastpos[3];
 	tone_t last_played;
 	RtMidiOutPtr outdevice;
+	clock_t last_time;
 } AppState;
 
 AppState create_app_state();

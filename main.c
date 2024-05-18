@@ -70,7 +70,6 @@ void on_capture(size_t idx, size_t n, LandmarkBuf* buf, void* userdata) {
     // TODO: Multi-hand support.
     if (idx > 0) return;
 
-    float dispersion = 0;
     float ux = 0, uy = 0, uz = 0;
     size_t n_landmarks = (buf -> length);
 
@@ -81,20 +80,37 @@ void on_capture(size_t idx, size_t n, LandmarkBuf* buf, void* userdata) {
         // Debug
 		// printf("Landmark [h: %zu, i: %u] (%g, %g, %g)\n", idx, i, co_ords[0], co_ords[1], co_ords[2]);
 
-        dispersion += co_ords[0]*co_ords[0];
-        dispersion += co_ords[1]*co_ords[1];
-        dispersion += co_ords[2]*co_ords[2];
+        // dispersion += co_ords[0]*co_ords[0];
+        // dispersion += co_ords[1]*co_ords[1];
+        // dispersion += co_ords[2]*co_ords[2];
 
         ux += co_ords[0];
         uy += co_ords[1];
         uz += co_ords[2];
 	}
 
-    dispersion = dispersion / n_landmarks;
-
     ux /= n_landmarks;
     uy /= n_landmarks;
     uz /= n_landmarks;
+
+    float dispersion = 0.0;
+
+    for (unsigned i = 4; i < n_landmarks; i += 4) {
+        float co_ords[3] = {0, 0, 0};
+        MP_GetAtBuf(buf, i, co_ords);
+
+        float tx = co_ords[0];
+        float ty = co_ords[1];
+        float tz = co_ords[2];
+
+        MP_GetAtBuf(buf, i-3, co_ords);
+
+        tx -= co_ords[0];
+        ty -= co_ords[1];
+        tz -= co_ords[2];
+
+        dispersion += tx*tx + ty*ty + tz*tz;
+    }
 
     AppState* app_state = (AppState*)userdata;
 
@@ -103,7 +119,7 @@ void on_capture(size_t idx, size_t n, LandmarkBuf* buf, void* userdata) {
     d2 += pow((uy - (app_state -> lastpos[1])), 2.0);
     d2 += pow((uz - (app_state -> lastpos[2])), 2.0);
 
-    dispersion -= d2;
+    dispersion /= 5; // Five fingers per hand.
     dispersion = sqrt(dispersion);
 
     printf("dispersion: %g, d2: %g, s: %g\n", dispersion, d2, sqrt(d2));
@@ -114,6 +130,13 @@ void on_capture(size_t idx, size_t n, LandmarkBuf* buf, void* userdata) {
     // If hand is in fist configuration, and dispersion is below the lower bound, volume = 0.
     // Skip, instead of sending a muted message.
     if (dispersion < global_config.dispersion_lower_bound) return;
+
+    clock_t current_time = clock();
+    clock_t elapsed = 1000*(current_time - (app_state -> last_time)) / CLOCKS_PER_SEC;
+
+    // If sufficient time hasn't elapsed, skip.
+    if (elapsed < global_config.cooldown_millis) return;
+    else app_state -> last_time = current_time; // Otherwise update time.
 
     app_state -> lastpos[0] = ux;
     app_state -> lastpos[1] = uy;
