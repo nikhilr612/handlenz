@@ -1,107 +1,28 @@
 #include <math.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
 
+#include "utils.h"
 #include "libmpc.h"
 #include "app.h"
 
 AppConfig global_config;
 
-char* readFile(const char* filename) {
-    FILE* file = fopen(filename, "r"); // Open file for reading
-    if (file == NULL) {
-        fprintf(stderr, "Error opening file %s\n", filename);
-        return NULL;
-    }
-
-    // Allocate initial buffer size
-    size_t buffer_size = 1024; // Initial buffer size
-    char* buffer = (char*)malloc(buffer_size);
-    if (buffer == NULL) {
-        fclose(file);
-        fprintf(stderr, "Memory allocation failed\n");
-        return NULL;
-    }
-
-    size_t length = 0; // Current length of string in buffer
-
-    // Read file line by line
-    char line[1024]; // Buffer for reading lines
-    while (fgets(line, sizeof(line), file) != NULL) {
-        size_t line_length = strlen(line);
-        // Resize buffer if necessary
-        while (length + line_length + 1 > buffer_size) {
-            buffer_size += buffer_size * 3 / 4;
-            char* new_buffer = (char*)realloc(buffer, buffer_size);
-            if (new_buffer == NULL) {
-                fclose(file);
-                free(buffer);
-                fprintf(stderr, "Memory reallocation failed\n");
-                return NULL;
-            }
-            buffer = new_buffer;
-        }
-        // Concatenate line to buffer
-        strcpy(buffer + length, line);
-        length += line_length;
-    }
-
-    fclose(file);
-
-    // Null-terminate the buffer
-    buffer[length] = '\0';
-
-    return buffer;
-}
-
-void program_change(RtMidiOutPtr outdevice, uint8_t program) {
-    if (outdevice != NULL) {
-        uint8_t message[2] = {192, program};
-        rtmidi_out_send_message(outdevice, message, 2);
-    }
-}
-
 void on_capture(size_t idx, size_t n, LandmarkBuf* buf, void* userdata) {
-	printf("Call %zu, %zu\n", idx, n);
+	printf("call %zu, %zu: ", idx, n);
 
     // TODO: Multi-hand support.
     if (idx > 0) return;
 
     float ux = 0, uy = 0, uz = 0;
+    float co_ords[3] = {0, 0, 0};
     size_t n_landmarks = (buf -> length);
-
-	for (unsigned i = 0; i < n_landmarks; i++){
-		float co_ords[3] = {0, 0, 0};
-		MP_GetAtBuf(buf, i, co_ords);
-
-        // Debug
-		// printf("Landmark [h: %zu, i: %u] (%g, %g, %g)\n", idx, i, co_ords[0], co_ords[1], co_ords[2]);
-
-        // dispersion += co_ords[0]*co_ords[0];
-        // dispersion += co_ords[1]*co_ords[1];
-        // dispersion += co_ords[2]*co_ords[2];
-
-        ux += co_ords[0];
-        uy += co_ords[1];
-        uz += co_ords[2];
-	}
-
-    ux /= n_landmarks;
-    uy /= n_landmarks;
-    uz /= n_landmarks;
 
     float dispersion = 0.0;
 
     for (unsigned i = 4; i < n_landmarks; i += 4) {
-        float co_ords[3] = {0, 0, 0};
         MP_GetAtBuf(buf, i, co_ords);
 
-        float tx = co_ords[0];
-        float ty = co_ords[1];
-        float tz = co_ords[2];
+        float tx = co_ords[0], ty = co_ords[1], tz = co_ords[2];
 
         MP_GetAtBuf(buf, i-3, co_ords);
 
@@ -110,7 +31,22 @@ void on_capture(size_t idx, size_t n, LandmarkBuf* buf, void* userdata) {
         tz -= co_ords[2];
 
         dispersion += tx*tx + ty*ty + tz*tz;
+
+        ux += co_ords[0];
+        uy += co_ords[1];
+        uz += co_ords[2];
     }
+
+    MP_GetAtBuf(buf, 0, co_ords);
+
+    ux += co_ords[0];
+    uy += co_ords[1];
+    uz += co_ords[2];
+
+    // 5 fingers + base.
+    ux /= 6;
+    uy /= 6;
+    uz /= 6;
 
     AppState* app_state = (AppState*)userdata;
 
@@ -142,11 +78,7 @@ void on_capture(size_t idx, size_t n, LandmarkBuf* buf, void* userdata) {
     app_state -> lastpos[1] = uy;
     app_state -> lastpos[2] = uz;
 
-    // Recenter.
-    ux -= 0.5;
-    uy -= 0.5;
-
-    float r = sqrt(ux*ux + uy*uy); // Not taking uz into account. Z-position should acconut for velocity, indirectly through dispersion.
+    float r = fabs(ux - 0.5) + fabs(uy - 0.5) / sqrt(2);
     tone_t midi_key = index_scale(&global_config.scale, (size_t)(global_config.index_rate * r));
 
     uint8_t velocity = (uint8_t)(global_config.max_volume * (dispersion / global_config.dispersion_upper_bound));
@@ -173,7 +105,7 @@ int main() {
         printf("Failed to load graph.\n");
         return -1;
     }
-    printf("Successfully loaded graph file into memory.");
+    printf("Successfully loaded graph file into memory.\n");
 
     AppState state = create_app_state();
 
@@ -182,6 +114,9 @@ int main() {
 
     // TODO: Implement loading configuration from file.
     default_app_config(&global_config, sc);
+
+    if(app_config_from_ini(&global_config, "HandLenz.ini")) printf("\nLoaded configuration. ");
+    else fprintf(stderr, "Warning: Could not load local configuration file. Falling back to defaults.\n");
 
     RtMidiOutPtr outdevice = rtmidi_out_create(RTMIDI_API_WINDOWS_MM, "handlenz");
 

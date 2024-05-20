@@ -51,4 +51,9 @@ typedef struct {
 AppState create_app_state();
 void set_output_device(AppState* st, RtMidiOutPtr ptr);
 
+void program_change(RtMidiOutPtr outdevice, uint8_t program);
+
+// Try to load app config from an INI file.
+bool app_config_from_ini(AppConfig* cfg, const char* path);
+
 #endif

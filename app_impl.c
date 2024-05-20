@@ -6,11 +6,11 @@ void default_app_config(AppConfig *cfg, Scale sc) {
 	cfg -> d2_threshold = 0.001;
 	cfg -> dispersion_lower_bound = 0.09;
 	cfg -> dispersion_upper_bound = 0.20;
-	cfg -> index_rate = 5.0;
+	cfg -> index_rate = 4.0;
 	cfg -> max_volume = 127;
 	cfg -> midiout_port = 0;
 	cfg -> let_ring = false;
-	cfg -> program = 46;
+	cfg -> program = 0;
 	cfg -> scale = sc;
 	cfg -> cooldown_millis = 100;
 }
@@ -32,4 +32,11 @@ AppState create_app_state() {
 
 void set_output_device(AppState *st, RtMidiOutPtr ptr) {
 	st->outdevice = ptr;
+}
+
+void program_change(RtMidiOutPtr outdevice, uint8_t program) {
+    if (outdevice != NULL) {
+        uint8_t message[2] = {192, program};
+        rtmidi_out_send_message(outdevice, message, 2);
+    }
 }

@@ -68,7 +68,7 @@ set_target_properties(RTMIDI PROPERTIES
 )
 
 # Main executable
-add_executable(main main.c app_impl.c scales_impl.c)
+add_executable(main main.c app_impl.c scales_impl.c utils_impl.c)
 set_property(TARGET main PROPERTY CXX_STANDARD 17)
 set_property(TARGET main PROPERTY CXX_STANDARD_REQUIRED ON)
 target_link_libraries(main LIBMP)
